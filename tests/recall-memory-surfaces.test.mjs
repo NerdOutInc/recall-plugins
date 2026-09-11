@@ -84,7 +84,8 @@ test("the host matrix distinguishes skills, local MCP, and automatic hooks", asy
   assert.deepEqual(Object.keys(hooks.hooks), ["SessionStart", "UserPromptSubmit"]);
   for (const eventName of ["SessionStart", "UserPromptSubmit"]) {
     assert.equal(hooks.hooks[eventName].length, 1, eventName);
-    assert.equal(hooks.hooks[eventName][0].hooks.length, 1, eventName);
+    assert.equal(hooks.hooks[eventName][0].hooks.length, 2, eventName);
+    assert.match(hooks.hooks[eventName][0].hooks[1].command, /agent-request-context\.mjs/);
     assert.equal(hooks.hooks[eventName][0].hooks[0].type, "command", eventName);
     assert.equal(hooks.hooks[eventName][0].matcher, undefined, eventName);
   }

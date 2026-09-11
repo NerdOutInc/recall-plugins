@@ -324,7 +324,8 @@ test("host manifests share the current plugin version", async () => {
   // 0.39.0 delivers the journal protocol once per session on SessionStart
   // (re-sent after a resume or compaction) and shrinks every prompt to a
   // reminder under 400 bytes, so hook context stops growing with each turn.
-  assert.equal(codexPlugin.version, "0.39.0");
+  // 0.40.0 adds the independent, capability-gated owner agent inbox hook.
+  assert.equal(codexPlugin.version, "0.40.0");
   assert.equal(claudePlugin.version, codexPlugin.version);
   const desktop = await readJson("desktop-extensions/recall/manifest.json");
   assert.equal(desktop.version, "0.10.0");
