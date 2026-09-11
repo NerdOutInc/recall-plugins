@@ -36,3 +36,10 @@ test('the installed hook executes without reading a journal config', () => {
     assert.ok(hooks.hooks[event][0].hooks.some(hook => hook.command.includes('agent-request-context.mjs')));
   }
 });
+
+
+test('the protocol requires a sync receipt rather than a local thread read', () => {
+  const protocol = fs.readFileSync('plugins/recall/skills/recall/SKILL.md', 'utf8');
+  assert.match(protocol, /until `reply_comment` returns `syncStatus: "synced"`/);
+  assert.match(protocol, /includes locally queued comments, so reading the reply there does not confirm\nserver delivery/);
+});

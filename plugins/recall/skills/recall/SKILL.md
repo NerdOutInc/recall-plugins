@@ -459,6 +459,8 @@ terminal request; do not rotate the claim UUID to bypass it. When replying, mint
 one `commentUuid` and preserve the exact text and UUID across retries. Resolve
 with the accepted claim and `disposition: "resolved"` only after the reply's
 `syncStatus` reports `"synced"`, or use `"dismissed"` for a deliberately declined
-request. A queued reply is not confirmed: retry its identical envelope or read
-back before resolving. The owner can also dismiss from Recall without a claim.
+request. A queued reply remains unresolved: retry its identical UUID and text
+until `reply_comment` returns `syncStatus: "synced"`. `read_comment_thread`
+includes locally queued comments, so reading the reply there does not confirm
+server delivery. The owner can also dismiss from Recall without a claim.
 Keep uncertain receipts unresolved and report them; do not claim success.
