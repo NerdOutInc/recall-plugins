@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Prints what the Recall plugin puts into an agent's context, in UTF-8 bytes:
-// the journal hook by route and event, the skill bundle by mode, the tool
+// all registered hooks by route and event, the skill bundle by mode, the tool
 // catalog by subset (from the checked-in generation fixture), and a per-session
 // cost model. Bytes only; tokens are roughly bytes divided by four for English
 // prose, and nothing here is billed usage. Pass --json for machine output.
@@ -13,7 +13,6 @@ import { readModeGuidanceSync } from "../tests/helpers/read-skill-guidance.mjs";
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const pluginRoot = path.join(repositoryRoot, "plugins/recall");
-const hookScript = path.join(pluginRoot, "hooks/journal-context.mjs");
 const fixtureRoot = path.join(repositoryRoot, "tests/fixtures/recall-journal-hook");
 const skillRoot = path.join(pluginRoot, "skills");
 const catalogFixture = path.join(repositoryRoot, "tests/fixtures/recall-catalog/generation-8.json");
@@ -24,30 +23,45 @@ const read = (relativePath) => fs.readFileSync(path.join(skillRoot, relativePath
 
 function cleanEnvironment() {
   const environment = { ...process.env };
-  for (const name of ["CLAUDE_CONFIG_DIR", "CLAUDE_PLUGIN_ROOT", "CODEX_HOME", "CURSOR_HOME", "PLUGIN_ROOT"]) {
+  for (const name of ["CLAUDE_CONFIG_DIR", "CLAUDE_PLUGIN_ROOT", "CODEX_HOME", "CURSOR_HOME", "CURSOR_PLUGIN_ROOT", "PLUGIN_ROOT"]) {
     delete environment[name];
   }
   return environment;
 }
 
-function runHook(environment, input, args = []) {
-  const result = spawnSync(process.execPath, [hookScript, ...args], {
-    cwd: repositoryRoot,
-    encoding: "utf8",
-    env: environment,
-    input: JSON.stringify(input),
-  });
-  if (result.status !== 0) throw new Error(result.stderr || `hook exited ${result.status}`);
-  if (!result.stdout) return "";
-  const output = JSON.parse(result.stdout);
-  return output.additional_context ?? output.hookSpecificOutput?.additionalContext ?? "";
+// Execute the manifest's command list, not a hand-maintained script list. A new
+// registered hook therefore contributes to the totals without a metrics edit.
+export function measureEvent(environment, input, manifest) {
+  const components = [];
+  for (const group of manifest.hooks[input.hook_event_name] ?? []) {
+    if (group.matcher) throw new Error("Hook measurement needs an explicit matcher fixture");
+    for (const hook of group.hooks ?? [group]) {
+      if (hook.type && hook.type !== "command") throw new Error(`Unsupported hook type: ${hook.type}`);
+      if (!hook.command) throw new Error("Registered hook has no command");
+      const result = spawnSync("/bin/sh", ["-c", hook.command], {
+        cwd: repositoryRoot,
+        encoding: "utf8",
+        env: environment,
+        input: JSON.stringify(input),
+        timeout: 10_000,
+      });
+      if (result.status !== 0) throw new Error(result.stderr || `hook exited ${result.status}`);
+      const output = result.stdout.trim() ? JSON.parse(result.stdout) : {};
+      const context = output.additional_context ?? output.hookSpecificOutput?.additionalContext ?? "";
+      components.push({ command: hook.command, bytes: bytes(context) });
+    }
+  }
+  return { bytes: components.reduce((total, component) => total + component.bytes, 0), components };
 }
 
 export function measureHook() {
   const temporary = fs.mkdtempSync(path.join(os.tmpdir(), "recall-measure-"));
   const noRepository = fs.mkdtempSync(path.join(temporary, "no-repository-"));
   try {
-    const codex = (version) => ({ ...cleanEnvironment(), CODEX_HOME: path.join(fixtureRoot, version), PLUGIN_ROOT: pluginRoot });
+    const manifest = JSON.parse(fs.readFileSync(path.join(pluginRoot, "hooks/hooks.json"), "utf8"));
+    const cursorManifest = JSON.parse(fs.readFileSync(path.join(pluginRoot, ".cursor-plugin/hooks.json"), "utf8"));
+    // Codex supplies the Claude alias as well as its identifying PLUGIN_ROOT.
+    const codex = (version) => ({ ...cleanEnvironment(), CODEX_HOME: path.join(fixtureRoot, version), PLUGIN_ROOT: pluginRoot, CLAUDE_PLUGIN_ROOT: pluginRoot });
     const claude = (version) => ({ ...cleanEnvironment(), CLAUDE_CONFIG_DIR: path.join(fixtureRoot, version), CLAUDE_PLUGIN_ROOT: pluginRoot });
     const routes = [
       ["v1 legacy, Codex", codex("v1"), repositoryRoot],
@@ -63,24 +77,28 @@ export function measureHook() {
     ];
     const rows = routes.map(([label, environment, cwd]) => {
       const base = { cwd, session_id: THREAD_ID };
+      const events = {
+        sessionStart: measureEvent(environment, { ...base, hook_event_name: "SessionStart", source: "startup" }, manifest),
+        sessionCompact: measureEvent(environment, { ...base, hook_event_name: "SessionStart", source: "compact" }, manifest),
+        prompt: measureEvent(environment, { ...base, hook_event_name: "UserPromptSubmit" }, manifest),
+      };
       return {
         route: label,
-        sessionStart: bytes(runHook(environment, { ...base, hook_event_name: "SessionStart", source: "startup" })),
-        sessionCompact: bytes(runHook(environment, { ...base, hook_event_name: "SessionStart", source: "compact" })),
-        prompt: bytes(runHook(environment, { ...base, hook_event_name: "UserPromptSubmit" })),
+        ...Object.fromEntries(Object.entries(events).map(([name, event]) => [name, event.bytes])),
+        components: Object.fromEntries(Object.entries(events).map(([name, event]) => [name, event.components])),
       };
     });
+    const cursorSession = measureEvent(
+      { ...cleanEnvironment(), CURSOR_HOME: path.join(fixtureRoot, "v5"), CURSOR_PLUGIN_ROOT: pluginRoot },
+      { hook_event_name: "sessionStart", workspace_roots: [repositoryRoot], conversation_id: THREAD_ID },
+      cursorManifest,
+    );
     rows.push({
       route: "v5 writer, Cursor sessionStart",
-      sessionStart: bytes(
-        runHook(
-          { ...cleanEnvironment(), CURSOR_HOME: path.join(fixtureRoot, "v5") },
-          { hook_event_name: "sessionStart", workspace_roots: [repositoryRoot], conversation_id: THREAD_ID },
-          ["--host", "cursor"],
-        ),
-      ),
+      sessionStart: cursorSession.bytes,
       sessionCompact: null,
       prompt: null,
+      components: { sessionStart: cursorSession.components, sessionCompact: [], prompt: [] },
     });
     return rows;
   } finally {
@@ -102,6 +120,7 @@ export function measureSkills() {
     "configuration.md": read("recall-journal/references/configuration.md"),
     "legacy-notes.md": read("recall-journal/references/legacy-notes.md"),
     "recall/SKILL.md": read("recall/SKILL.md"),
+    "recall/references/agent-requests.md": read("recall/references/agent-requests.md"),
     "doctor/SKILL.md": read("doctor/SKILL.md"),
   };
   const sizes = Object.fromEntries(Object.entries(files).map(([name, text]) => [name, bytes(text)]));
@@ -114,6 +133,7 @@ export function measureSkills() {
       "v5/v7 with effort recovery": sizes["recall-journal/SKILL.md"] + sizes["structured-writer.md"] + sizes["project-context.md"] + sizes["efforts.md"] + sizes["efforts-recovery.md"],
       "v3/v4 readers (dispatcher, readers, project context)": sizes["recall-journal/SKILL.md"] + sizes["structured-readers.md"] + sizes["project-context.md"],
       "v1/v2 legacy closure (test helper)": bytes(readModeGuidanceSync(skill, "v1/v2 legacy notes").text),
+      "Recall with optional agent requests": sizes["recall/SKILL.md"] + sizes["recall/references/agent-requests.md"],
     },
     descriptions: {
       "recall-journal": description(files["recall-journal/SKILL.md"]),
@@ -150,7 +170,9 @@ export function measureCatalog() {
 }
 
 // One Claude Code session under the v5/v7 writer. Response sizes are the
-// September 2026 measurements from the plan; hook and skill sizes are live.
+// September 2026 journal measurements from the plan; hook and skill sizes are live.
+// Combined hooks include the inbox reminder, but this illustrative comparison
+// excludes inbox tool schemas and results, which vary with workspace count.
 export function costModel(hook, skills, catalog) {
   const v5 = hook.find((row) => row.route === "v5 writer, repository, Claude Code");
   const responses = { resolve: 140, openBase: 800, openPerOtherSession: 800, context: 22570, appendEcho: 1500, close: 500 };
@@ -184,7 +206,7 @@ function main() {
     return;
   }
   const out = [];
-  out.push("## Journal hook (bytes per event)\n", table(["Route", "SessionStart startup", "SessionStart compact", "UserPromptSubmit"], hook.map((row) => [row.route, row.sessionStart, row.sessionCompact, row.prompt])));
+  out.push("## Registered hooks, combined (bytes per event)\n", table(["Route", "SessionStart startup", "SessionStart compact", "UserPromptSubmit"], hook.map((row) => [row.route, row.sessionStart, row.sessionCompact, row.prompt])));
   out.push("\n## Skill files (bytes)\n", table(["File", "Bytes"], Object.entries(skills.files)));
   out.push("\n## Skill bundles (bytes)\n", table(["Bundle", "Bytes"], Object.entries(skills.bundles)));
   out.push("\n## Skill descriptions, loaded in every session (bytes)\n", table(["Skill", "Bytes"], Object.entries(skills.descriptions)));
@@ -197,6 +219,7 @@ function main() {
   ]));
   out.push("\n## Largest tools (description + schema bytes)\n", table(["Tool", "Description", "Schema"], catalog.largest.map((tool) => [tool.name, tool.description, tool.schema])));
   out.push("\n## Cost model, one Claude Code session (bytes; responses fixed at the September 2026 measurements)\n", table(["Scenario", "Plugin 0.38.0", "Now", "Cut"], model.map((row) => [row.scenario, row.before, row.after, `${Math.round((1 - row.after / row.before) * 100)}%`])));
+  out.push("\nThis illustrative comparison uses fixed journal response sizes. It includes the combined hook text but excludes inbox tool schemas and results, whose cost varies with workspace count.");
   process.stdout.write(`${out.join("\n")}\n`);
 }
 

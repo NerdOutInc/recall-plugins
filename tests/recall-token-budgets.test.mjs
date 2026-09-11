@@ -5,7 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
-import { measureCatalog, measureHook, measureSkills } from "../scripts/measure-context-cost.mjs";
+import { measureCatalog, measureEvent, measureHook, measureSkills } from "../scripts/measure-context-cost.mjs";
 
 // Every byte the plugin puts into an agent's context has a ceiling here, so a
 // wording change that quietly grows the per-prompt reminder or the skill bundle
@@ -21,6 +21,11 @@ const BUDGETS = {
   hookAbsentConnectorReminder: 640,
   hookInvalidConfigReminder: 256,
   hookCursorSession: 4.5 * KIB,
+  // Additional inbox context is allowed only at session start/compaction.
+  // Keep the existing journal ceilings independently enforced below.
+  hookAgentRequestsSession: 1000,
+  recallSkill: 26 * KIB,
+  agentRequestsReference: 6 * KIB,
   dispatcher: 4.5 * KIB,
   writer: 12.5 * KIB,
   projectContext: 4.5 * KIB,
@@ -62,21 +67,59 @@ test("every per-prompt reminder golden stays under its budget", () => {
   }
 });
 
-test("the live hook stays under budget on every route and event, compaction included", () => {
+test("all registered hooks fit their combined and individual event budgets", () => {
   for (const row of measureHook()) {
-    if (row.route.includes("Cursor")) {
-      assert.ok(row.sessionStart <= BUDGETS.hookCursorSession, `${row.route}: ${row.sessionStart}`);
-      continue;
+    const cursor = row.route.includes("Cursor");
+    for (const event of ["sessionStart", "sessionCompact", "prompt"]) {
+      const components = row.components[event];
+      if (row[event] === null) {
+        assert.deepEqual(components, []);
+        continue;
+      }
+      const names = components.map(({ command }) => /\/hooks\/([^" ]+)/.exec(command)?.[1]);
+      const expected = ["journal-context.mjs"];
+      if (!cursor && event !== "prompt") expected.push("agent-request-context.mjs");
+      // New or duplicate registrations cannot hide outside the measured total
+      // or acquire an implicit allowance by growing a different hook's budget.
+      assert.deepEqual(names.sort(), expected.sort(), `${row.route} ${event}`);
+      assert.equal(row[event], components.reduce((total, component) => total + component.bytes, 0));
+      const journal = components.find(({ command }) => command.includes("/hooks/journal-context.mjs")).bytes;
+      const inbox = components.find(({ command }) => command.includes("/hooks/agent-request-context.mjs"))?.bytes ?? 0;
+      const journalBudget = cursor ? BUDGETS.hookCursorSession
+        : event === "sessionStart" ? BUDGETS.hookSessionStartup
+          : event === "sessionCompact" ? BUDGETS.hookSessionCompact : BUDGETS.hookReminder;
+      const inboxBudget = !cursor && event !== "prompt" ? BUDGETS.hookAgentRequestsSession : 0;
+      assert.ok(journal <= journalBudget, `${row.route} ${event} journal: ${journal} > ${journalBudget}`);
+      assert.ok(inbox <= inboxBudget, `${row.route} ${event} inbox: ${inbox} > ${inboxBudget}`);
+      if (inboxBudget) assert.ok(inbox > 0, `${row.route} ${event}: registered inbox hook was omitted`);
+      assert.ok(row[event] <= journalBudget + inboxBudget, `${row.route} ${event}: ${row[event]}`);
     }
-    assert.ok(row.sessionStart <= BUDGETS.hookSessionStartup, `${row.route} startup: ${row.sessionStart}`);
-    assert.ok(row.sessionCompact <= BUDGETS.hookSessionCompact, `${row.route} compact: ${row.sessionCompact}`);
-    assert.ok(row.prompt <= BUDGETS.hookReminder, `${row.route} prompt: ${row.prompt}`);
-    // On the writer routes the reminder is the every-prompt cost, so it must
-    // stay a small fraction of the once-per-session context it points back at.
-    if (row.route.includes("writer")) {
-      assert.ok(row.prompt * 8 < row.sessionStart, `${row.route}: reminder ${row.prompt} is not small beside ${row.sessionStart}`);
+    if (!cursor && row.route.includes("writer")) {
+      const journalStart = row.components.sessionStart.find(({ command }) => command.includes("/hooks/journal-context.mjs")).bytes;
+      assert.ok(row.prompt * 8 < journalStart, `${row.route}: reminder ${row.prompt} is not small beside ${journalStart}`);
     }
   }
+});
+
+test("measurement includes every registered command, including a second hook group", () => {
+  const pluginRoot = path.join(repositoryRoot, "plugins/recall");
+  const manifest = JSON.parse(fs.readFileSync(path.join(pluginRoot, "hooks/hooks.json"), "utf8"));
+  const environment = {
+    ...process.env,
+    CODEX_HOME: path.join(fixtureRoot, "v5"),
+    CLAUDE_PLUGIN_ROOT: pluginRoot,
+    PLUGIN_ROOT: pluginRoot,
+  };
+  const input = { cwd: repositoryRoot, hook_event_name: "SessionStart", source: "startup" };
+  const baseline = measureEvent(environment, input, manifest);
+  const inboxHook = manifest.hooks.SessionStart.flatMap((group) => group.hooks)
+    .find(({ command }) => command.includes("/hooks/agent-request-context.mjs"));
+  const inboxBytes = baseline.components.find(({ command }) => command === inboxHook.command).bytes;
+  assert.ok(inboxBytes > 0);
+  manifest.hooks.SessionStart.push({ hooks: [inboxHook] });
+  const duplicate = measureEvent(environment, input, manifest);
+  assert.equal(duplicate.components.length, baseline.components.length + 1);
+  assert.equal(duplicate.bytes, baseline.bytes + inboxBytes);
 });
 
 test("an invalid config produces a short per-prompt reminder", () => {
@@ -123,6 +166,15 @@ test("the journal skill references and bundles stay under budget", () => {
   assert.doesNotMatch(efforts, /resume_milestone|freshMilestoneAllowed|pendingCursor/);
 });
 
+test("the Recall skill and optional agent request protocol have separate budgets", () => {
+  const skills = measureSkills();
+  const reference = skills.files["recall/references/agent-requests.md"];
+  const recall = skills.files["recall/SKILL.md"];
+  assert.ok(recall > 0 && recall <= BUDGETS.recallSkill, `Recall skill: ${recall}`);
+  assert.ok(reference > 0 && reference <= BUDGETS.agentRequestsReference, `Agent request reference: ${reference}`);
+  assert.equal(skills.bundles["Recall with optional agent requests"], recall + reference);
+});
+
 test("the always-on skill descriptions stay short", () => {
   const { descriptions } = measureSkills();
   assert.ok(descriptions["recall-journal"] <= BUDGETS.descriptionJournal, String(descriptions["recall-journal"]));
@@ -148,7 +200,7 @@ test("the measurement script prints every table", () => {
     encoding: "utf8",
   });
   assert.equal(result.status, 0, result.stderr);
-  for (const heading of ["## Journal hook", "## Skill bundles", "## Tool catalog fixture", "## Cost model"]) {
+  for (const heading of ["## Registered hooks, combined", "## Skill bundles", "## Tool catalog fixture", "## Cost model"]) {
     assert.ok(result.stdout.includes(heading), heading);
   }
   const json = spawnSync(process.execPath, [path.join(repositoryRoot, "scripts/measure-context-cost.mjs"), "--json"], {
