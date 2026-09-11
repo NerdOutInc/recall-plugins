@@ -26,6 +26,12 @@ Missing `open_session`, `record_session_lifecycle`, or another write tool does
 not establish a missing connector: workspace policy, scopes, and response
 capabilities can legitimately withhold them. A listed read tool can still fail
 when called; preserve that error instead of relabeling the inventory.
+Workspace **Write includes Read**. An enabled server, a registered CLI entry,
+and approved live sessions do not establish this conversation's tool attachment.
+Do not ask the user to enable an already-enabled server, broaden workspace
+access, revoke existing grants, or reset credentials as a diagnostic shortcut.
+Offer **Allow again** only for a confirmed denied or revoked grant when the
+user wants to reconnect; native consent remains the user's decision.
 
 Resolve `scripts/recall-doctor` relative to this `SKILL.md` and run its absolute
 path from the current working directory. Always select the current host with

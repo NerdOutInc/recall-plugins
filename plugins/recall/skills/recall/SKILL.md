@@ -46,21 +46,23 @@ search-result backlinks. Do not modify the user's journal mode to gain a tool.
     token instead.
 - The server endpoint is `http://127.0.0.1:38473/mcp`.
 
-If the Recall server never appears in the tool list, or MCP calls
-fail with connection errors (unable to connect, server unreachable), the
-Recall Mac app is not running — or its MCP server is disabled in
-Settings.
-Verify with `nc -z 127.0.0.1 38473`. A locked screen does NOT cause this: the
-app keeps serving MCP while the Mac is locked and while its windows are
-closed, so never report lock, sleep, or screen state as the cause. Ask the
-user to launch the Recall Mac app (it is often quit during
-development, since dev builds share port 38473) and enable the local MCP
-server. If a first-party plugin call fails with an authorization error, ask the
-user to choose **Allow again** under **Settings -> MCP Server -> Local bridge
-access**, approve the native prompt, and start a new conversation. For Hermes,
-rerun `hermes mcp login recall` instead.
-On legacy token setups, ask the user to reveal or regenerate the token in
-Recall settings and update `NERD_OUT_MCP_TOKEN`.
+When tools are missing or a call fails, follow [Recall Doctor](../doctor/SKILL.md)
+before proposing setup changes. Inspect this conversation's **Recall read
+tools** and preserve any actual call error. A `codex mcp list` entry, reachable
+TCP listener, or approved live sessions does not prove that this conversation
+has tools attached. Workspace **Write includes Read**; absent write or lifecycle
+tools alone can reflect workspace policy, scopes, or capabilities.
+
+Do not ask the user to enable an already-enabled server, broaden workspace
+access, revoke existing grants, or reset credentials as a diagnostic shortcut.
+A successful fresh probe verifies its own connection, not this conversation's
+tool attachment; run one only with the authorization described in Doctor.
+Use current evidence to choose recovery. Offer **Allow again** under
+**Settings -> MCP Server -> Local bridge access** only for a confirmed denied
+or revoked grant when the user wants to reconnect. Native consent remains the
+user's decision. Legacy OAuth, Hermes, and bearer-token errors need diagnosis
+of that transport before suggesting sign-in or credential changes. A locked
+screen alone does not explain missing tools.
 
 ## Tool Use
 
