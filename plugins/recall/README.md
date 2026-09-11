@@ -701,11 +701,11 @@ journal skill and MCP server keep those responsibilities. The separate
 agent-request hook emits discovery instructions; the agent makes the live
 metadata-only MCP calls described above.
 
-If the agent reports a connection error, confirm the Mac app is open and the
-server is enabled. If it reports an authorization error, start a new
-conversation, choose **Allow again** under Recall's **Settings → MCP Server →
-Local bridge access**, and approve the native prompt. If the MCP log says
-`transport: oauth-http`, the older OAuth fallback is active instead; deleting
-the affected agent's directory under `~/.mcp-auth/recall/` forces a fresh
-browser sign-in without clearing the other agent. If you don't see the server,
-use `codex mcp list` or `claude mcp list` to confirm its exact name.
+For missing tools or failed calls in Claude Code, Codex, or Cursor, follow
+[Recall Doctor](skills/doctor/SKILL.md). It separates listener reachability,
+native refusal states, legacy OAuth recovery, and the current conversation's
+tool attachment. Installed plugins and approved live sessions do not prove
+that the conversation has tools. Its [recovery guide](skills/doctor/SKILL.md#recovery-from-specific-evidence)
+explains when **Allow again** applies, how to retry after the bridge reconnects,
+and how to reset only the affected agent's OAuth cache for a confirmed sign-in
+failure. Hermes users should follow the [Hermes guide](../../docs/hermes-agent.md#troubleshooting).

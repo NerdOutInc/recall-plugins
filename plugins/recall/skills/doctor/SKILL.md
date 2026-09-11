@@ -26,6 +26,13 @@ Missing `open_session`, `record_session_lifecycle`, or another write tool does
 not establish a missing connector: workspace policy, scopes, and response
 capabilities can legitimately withhold them. A listed read tool can still fail
 when called; preserve that error instead of relabeling the inventory.
+Workspace **Write includes Read**: working reads with missing write tools can
+reflect workspace policy, scopes, or capabilities; missing reads cannot be
+explained by that workspace being set to Write. An enabled server, registered
+CLI entries, and approved live sessions do not establish this conversation's
+tool attachment.
+Do not ask the user to enable an already-enabled server, broaden workspace
+access, revoke existing grants, or reset credentials as a diagnostic shortcut.
 
 Resolve `scripts/recall-doctor` relative to this `SKILL.md` and run its absolute
 path from the current working directory. Always select the current host with
@@ -39,6 +46,13 @@ are rejected. The omitted-host default remains Claude for compatibility.
 The default run is passive: it reads process and socket metadata and, for
 Claude Code only, local log filenames/timestamps. It does not read log bodies,
 connect to a port, launch a bridge, change configuration, or grant access.
+
+A separate listener-only check is allowed during diagnosis:
+`nc -z 127.0.0.1 38473` (release; `38474` for debug). It sends no MCP request
+and cannot trigger consent. Failure establishes only that port's unreachability;
+check the app process and server setting rather than assuming either cause.
+Success proves reachability, not authentication or tool attachment. This check
+does not require Doctor's `--probe` and does not change its default behavior.
 
 Only add `--probe` when the user explicitly requests or agrees to a **new
 connection attempt**. Explain that it starts a temporary bridge using the
@@ -85,6 +99,43 @@ check was observed; unknown and skipped checks remain unverified.
   `starting` refusals in particular clear on their own once Recall finishes
   launching or its webview recovers. `signed_out` from an app ≥ the `starting`
   split means the webview CONFIRMED no session.
+
+## Recovery from specific evidence
+
+For **Allow again**, confirmation means a current call error explicitly names
+`denied` or `revoked`, or the user confirms that grant's state in Recall's
+**Settings -> MCP Server -> Local bridge access**. A `RECALL_BRIDGE_STATUS`
+line with either exact status is another source, subject to the log-read rules
+above; a historical refusal needs current corroboration. Generic authorization
+errors, probe exit 66, and successful initialize responses do not confirm denial.
+An initialize response from `0.0.0-degraded` is the retrying bridge, not a ready
+Recall app. When denial or revocation is confirmed and the user wants to
+reconnect, offer **Allow again**; the user handles native consent.
+
+`approval_pending` or `approval_timeout` means bring Recall forward for the
+user's prompt. `starting` means wait for startup/recovery; `signed_out` or
+`user_mismatch` means check the signed-in account. `unauthenticated` needs its
+typed diagnostic investigated, not a grant reset or OAuth downgrade.
+
+After approval, the resilient local bridge (plugin >= 0.33.0) retries and sends
+`notifications/tools/list_changed`. Recheck this conversation's read tools and
+retry a small read before suggesting a new conversation. For an interrupted
+write, check whether it took effect before retrying. A notification does not
+prove the host refreshed its catalog: if tools remain absent, report that
+attachment failure and use the host's connector refresh/restart procedure.
+Older bridges that exited may need a new conversation.
+
+`transport: oauth-http` means the bundled legacy `mcp-remote` fallback is active
+because the signed helper is absent or its protocol is unsupported. For a
+confirmed OAuth sign-in failure, offer a fresh browser sign-in: stop the affected
+agent's bridge, then move only its cache directory under `~/.mcp-auth/recall/`
+(`codex`, `claude`, or `cursor`) to a backup and reconnect. If
+`MCP_REMOTE_CONFIG_DIR` is overridden, resolve that agent's actual cache path
+first. Explain that this removes only that agent's cached OAuth credentials
+from use; preserve sibling directories and let the user handle authorization.
+Do not reset a healthy local-socket grant.
+Hermes uses its own OAuth cache: use `hermes mcp test recall` and, only for a
+confirmed OAuth login failure or revoked grant, `hermes mcp login recall`.
 
 ## Presenting the result
 

@@ -46,21 +46,20 @@ search-result backlinks. Do not modify the user's journal mode to gain a tool.
     token instead.
 - The server endpoint is `http://127.0.0.1:38473/mcp`.
 
-If the Recall server never appears in the tool list, or MCP calls
-fail with connection errors (unable to connect, server unreachable), the
-Recall Mac app is not running — or its MCP server is disabled in
-Settings.
-Verify with `nc -z 127.0.0.1 38473`. A locked screen does NOT cause this: the
-app keeps serving MCP while the Mac is locked and while its windows are
-closed, so never report lock, sleep, or screen state as the cause. Ask the
-user to launch the Recall Mac app (it is often quit during
-development, since dev builds share port 38473) and enable the local MCP
-server. If a first-party plugin call fails with an authorization error, ask the
-user to choose **Allow again** under **Settings -> MCP Server -> Local bridge
-access**, approve the native prompt, and start a new conversation. For Hermes,
-rerun `hermes mcp login recall` instead.
-On legacy token setups, ask the user to reveal or regenerate the token in
-Recall settings and update `NERD_OUT_MCP_TOKEN`.
+For missing tools, call errors, and recovery in Claude Code, Codex, or Cursor,
+follow [Recall Doctor](../doctor/SKILL.md).
+
+A listener-only check, `nc -z 127.0.0.1 38473` (`38474` for debug), cannot
+trigger consent; it tests TCP reachability, not authentication or attachment.
+A locked screen or closed windows do not stop Recall's MCP server.
+
+Hermes installs only this skill: run `hermes mcp test recall`;
+for a confirmed OAuth login failure or revoked OAuth grant, run
+`hermes mcp login recall` and let the user authorize it. See the
+[Hermes guide](https://github.com/NerdOutInc/recall-plugins/blob/main/docs/hermes-agent.md).
+For legacy bearer-token authentication errors, have the user verify
+`NERD_OUT_MCP_TOKEN` against Recall's token; never print it or reset credentials
+just because tools are missing.
 
 ## Tool Use
 
