@@ -46,23 +46,20 @@ search-result backlinks. Do not modify the user's journal mode to gain a tool.
     token instead.
 - The server endpoint is `http://127.0.0.1:38473/mcp`.
 
-When tools are missing or a call fails, follow [Recall Doctor](../doctor/SKILL.md)
-before proposing setup changes. Inspect this conversation's **Recall read
-tools** and preserve any actual call error. A `codex mcp list` entry, reachable
-TCP listener, or approved live sessions does not prove that this conversation
-has tools attached. Workspace **Write includes Read**; absent write or lifecycle
-tools alone can reflect workspace policy, scopes, or capabilities.
+For missing tools, call errors, and recovery in Claude Code, Codex, or Cursor,
+follow [Recall Doctor](../doctor/SKILL.md).
 
-Do not ask the user to enable an already-enabled server, broaden workspace
-access, revoke existing grants, or reset credentials as a diagnostic shortcut.
-A successful fresh probe verifies its own connection, not this conversation's
-tool attachment; run one only with the authorization described in Doctor.
-Use current evidence to choose recovery. Offer **Allow again** under
-**Settings -> MCP Server -> Local bridge access** only for a confirmed denied
-or revoked grant when the user wants to reconnect. Native consent remains the
-user's decision. Legacy OAuth, Hermes, and bearer-token errors need diagnosis
-of that transport before suggesting sign-in or credential changes. A locked
-screen alone does not explain missing tools.
+A listener-only check, `nc -z 127.0.0.1 38473` (`38474` for debug), cannot
+trigger consent; it tests TCP reachability, not authentication or attachment.
+A locked screen or closed windows do not stop Recall's MCP server.
+
+Hermes installs only this skill: run `hermes mcp test recall`;
+for a confirmed OAuth login failure or revoked OAuth grant, run
+`hermes mcp login recall` and let the user authorize it. See the
+[Hermes guide](https://github.com/NerdOutInc/recall-plugins/blob/main/docs/hermes-agent.md).
+For legacy bearer-token authentication errors, have the user verify
+`NERD_OUT_MCP_TOKEN` against Recall's token; never print it or reset credentials
+just because tools are missing.
 
 ## Tool Use
 

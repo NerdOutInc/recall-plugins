@@ -701,15 +701,11 @@ journal skill and MCP server keep those responsibilities. The separate
 agent-request hook emits discovery instructions; the agent makes the live
 metadata-only MCP calls described above.
 
-For missing tools or a failed call, follow [Recall Doctor](skills/doctor/SKILL.md)
-and inspect the current conversation's Recall read tools. An enabled server,
-registered CLI entry, or approved live sessions does not prove that tools are
-attached to that conversation. Workspace **Write includes Read**; missing write
-or lifecycle tools alone can reflect workspace policy, scopes, or capabilities.
-Do not broaden workspace access, revoke existing grants, or reset credentials
-as a diagnostic shortcut. Offer **Allow again** under **Settings → MCP Server →
-Local bridge access** only for a confirmed denied or revoked grant when the
-user wants to reconnect. Native consent remains the user's decision. A successful
-fresh probe verifies its own connection, not the existing conversation. If the
-MCP log says `transport: oauth-http`, diagnose that OAuth transport before
-suggesting a sign-in or credential change.
+For missing tools or failed calls in Claude Code, Codex, or Cursor, follow
+[Recall Doctor](skills/doctor/SKILL.md). It separates listener reachability,
+native refusal states, legacy OAuth recovery, and the current conversation's
+tool attachment. Installed plugins and approved live sessions do not prove
+that the conversation has tools. Its [recovery guide](skills/doctor/SKILL.md#recovery-from-specific-evidence)
+explains when **Allow again** applies, how to retry after the bridge reconnects,
+and how to reset only the affected agent's OAuth cache for a confirmed sign-in
+failure. Hermes users should follow the [Hermes guide](../../docs/hermes-agent.md#troubleshooting).
