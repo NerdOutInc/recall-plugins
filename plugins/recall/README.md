@@ -31,6 +31,23 @@ legacy notes. Load only the selected mode. Configuration and Codex hook trust
 remain separate procedures, so ordinary project work does not repeatedly load
 or run setup instructions.
 
+Plugin `0.40.0` adds comment-mention request discovery for Claude Code and
+Codex. Their `SessionStart` hook asks for one bounded `OPEN` and `PICKED_UP`
+page (`limit: 10`) per readable workspace after `list_workspaces`, without requiring a
+Project or journal configuration. Automatic summaries contain counts,
+workspaces, and parent note types; source titles and comment text are read
+only when the user asks to inspect or handle requests. Resume or compaction
+can repeat pending counts. Claimed requests remain unresolved until their
+original claim is completed or the owner dismisses them on the original
+comment in Recall; there is
+no claim lease or automatic reclaim. The detailed handling and retry protocol
+loads from the Recall skill's
+[agent-request reference](skills/recall/references/agent-requests.md) only when
+needed. This feature requires an installed Recall app with catalog generation
+9 support and the live advertised tools; updating this plugin alone is not
+enough. Cursor's agent-request inbox is not supported. Existing Cursor notes
+and journal support is unchanged.
+
 Plugin `0.39.0` delivers the journal protocol once per session instead of
 on every prompt. Claude Code and Codex keep each prompt's hook context in the
 transcript, so the former 4 KB per-prompt payload grew with every turn. The
@@ -574,6 +591,18 @@ compare-and-set: a lost race returns the current status, never a lock, and
 build simply omits these tools; the skills inspect the live catalog instead of
 assuming them from any version number.
 
+Comment mentions add a separate, account-owned request inbox on generation 9
+Recall apps: `list_agent_requests`, `claim_agent_request`, and
+`resolve_agent_request` work without a Recall Project or journal session.
+Claude Code and Codex use this surface only when the live schemas expose it.
+The startup sweep is read-only metadata discovery; reading source comments,
+claiming work, replying, and resolving require the user's request and the
+app's workspace policy. Cursor and the hosted cloud connector do not support
+this agent-request inbox. See the
+[handling protocol](skills/recall/references/agent-requests.md) for surviving
+claims, exact retry identities, and the server-sync receipt required before
+resolution.
+
 ## Skills
 
 This plugin can ship multiple skills; both agents discover every subdirectory
@@ -662,13 +691,15 @@ hook inventory and asks you to use `/hooks` when the Recall handler is new,
 modified, disabled, or missing. Hook trust remains your decision: the skill
 can detect and explain the state but never changes Codex's trust configuration
 or bypasses the review. Claude Code has no separate per-hook trust switch, so
-this preflight is Codex-only. The hook itself only checks the current agent's
+this preflight is Codex-only. The journal hook itself only checks the current agent's
 `recall-journal.json` shape and injects agent context, including the workspace
 and optional Recall Project that apply to the session — the filesystem
 project's destination when its saved path matches, the global destination
 otherwise — so the agent can search the journal right away.
 It does not read note bodies, validate workspace access, or write notes; the
-journal skill and MCP server keep those responsibilities.
+journal skill and MCP server keep those responsibilities. The separate
+agent-request hook emits discovery instructions; the agent makes the live
+metadata-only MCP calls described above.
 
 If the agent reports a connection error, confirm the Mac app is open and the
 server is enabled. If it reports an authorization error, start a new
