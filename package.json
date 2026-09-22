@@ -1,0 +1,14 @@
+{
+  "name": "recall-plugins",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Recall plugins for Claude Code, Codex, and Cursor — plus their eval suites.",
+  "scripts": {
+    "eval": "claude plugin eval plugins/recall --judge-model opus --allow-tools Write -j 3 --max-cost-usd 12",
+    "eval:local": "claude plugin eval plugins/recall --judge-model opus --allow-tools Write -j 3 --max-cost-usd 12 --no-publish",
+    "eval:pilot": "claude plugin eval plugins/recall --judge-model opus --allow-tools Write -j 3 --max-cost-usd 5 --runs 1 --no-publish",
+    "eval:behavior": "claude plugin eval plugins/recall --eval-dir evals-behavior --judge-model opus --allow-tools Write -j 3 --max-cost-usd 20",
+    "eval:behavior:pilot": "claude plugin eval plugins/recall --eval-dir evals-behavior --judge-model opus --allow-tools Write -j 3 --max-cost-usd 8 --runs 1 --no-publish",
+    "eval:ci": "claude plugin eval plugins/recall --judge-model opus --allow-tools Write -j 3 --max-cost-usd 12 --trust-plugin --no-publish"
+  }
+}

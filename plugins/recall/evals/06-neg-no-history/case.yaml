@@ -1,0 +1,21 @@
+schema_version: "1.0"
+name: 06-neg-no-history
+scaffold_script: |
+  DIR="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
+  mkdir -p "$DIR"
+  cat > "$DIR/recall-journal.json" <<'JSON'
+  {"version":7,"projectMemory":{"enabled":true,"global":{
+    "workspace":{"id":"ws-eval-personal","name":"Personal"},
+    "recallProject":{"id":"proj-eval-ai","name":"AI"}}}}
+  JSON
+execution:
+  prompt: |
+    Write `iso_duration.py` in the current directory. It parses ISO 8601 duration strings like `P3DT4H5M` or `PT30S` into a total number of seconds, and raises a clear error on anything malformed.
+
+    Check the project journal for relevant history before you start.
+  max_turns: 16
+  timeout_seconds: 300
+  allowed_tools: [Write]
+  model: sonnet
+  append_system_prompt: "The user's Recall journal destination is workspace id ws-eval-personal (name: Personal) and Recall Project id proj-eval-ai (name: AI). Use those ids directly."
+runs: 3

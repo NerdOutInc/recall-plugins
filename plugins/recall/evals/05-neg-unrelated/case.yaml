@@ -1,0 +1,21 @@
+schema_version: "1.0"
+name: 05-neg-unrelated
+scaffold_script: |
+  DIR="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
+  mkdir -p "$DIR"
+  cat > "$DIR/recall-journal.json" <<'JSON'
+  {"version":7,"projectMemory":{"enabled":true,"global":{
+    "workspace":{"id":"ws-eval-personal","name":"Personal"},
+    "recallProject":{"id":"proj-eval-ai","name":"AI"}}}}
+  JSON
+execution:
+  prompt: |
+    Write `contrast.py` in the current directory. It takes two hex colours like `#1a1a1a` and `#ffffff`, computes the WCAG 2.1 contrast ratio, and prints the ratio plus whether it passes AA (4.5:1) and AAA (7:1) for normal text.
+
+    Check the project journal for relevant history before you start.
+  max_turns: 16
+  timeout_seconds: 300
+  allowed_tools: [Write]
+  model: sonnet
+  append_system_prompt: "The user's Recall journal destination is workspace id ws-eval-personal (name: Personal) and Recall Project id proj-eval-ai (name: AI). Use those ids directly."
+runs: 3

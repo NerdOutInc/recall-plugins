@@ -1,0 +1,48 @@
+schema_version: "1.0"
+name: 04-malformed-retry
+scaffold_script: |
+    # Plants the v7 journal destination the hook needs, so this suite exercises the
+    # real hook-driven path. Inert today: --scaffold does not execute this yet.
+    DIR="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
+    mkdir -p "$DIR"
+    cat > "$DIR/recall-journal.json" <<'JSON'
+    {"version":7,"projectMemory":{"enabled":true,"global":{
+      "workspace":{"id":"ws-eval-personal","name":"Personal"},
+      "recallProject":{"id":"proj-eval-ai","name":"AI"}}}}
+    JSON
+execution:
+  prompt: |
+    Create `dedupe.py` in the current directory. Start from this snippet, which repeats the same normalisation three times:
+
+    ```python
+    def by_email(rows):
+        seen = set(); out = []
+        for r in rows:
+            k = r["email"].strip().lower()
+            if k not in seen: seen.add(k); out.append(r)
+        return out
+
+    def by_name(rows):
+        seen = set(); out = []
+        for r in rows:
+            k = r["name"].strip().lower()
+            if k not in seen: seen.add(k); out.append(r)
+        return out
+
+    def by_city(rows):
+        seen = set(); out = []
+        for r in rows:
+            k = r["city"].strip().lower()
+            if k not in seen: seen.add(k); out.append(r)
+        return out
+    ```
+
+    Refactor it into one reusable helper, keep the three functions working as a thin layer over it, No need to run anything.
+
+    Record this work in the Recall journal as you go.
+  max_turns: 20
+  timeout_seconds: 420
+  allowed_tools: [Write]
+  model: sonnet
+  append_system_prompt: "The user's Recall journal destination is workspace id ws-eval-personal (name: Personal) and Recall Project id proj-eval-ai (name: AI). Use those ids directly."
+runs: 3

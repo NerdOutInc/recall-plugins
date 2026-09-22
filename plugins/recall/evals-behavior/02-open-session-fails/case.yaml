@@ -1,0 +1,23 @@
+schema_version: "1.0"
+name: 02-open-session-fails
+scaffold_script: |
+    # Plants the v7 journal destination the hook needs, so this suite exercises the
+    # real hook-driven path. Inert today: --scaffold does not execute this yet.
+    DIR="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
+    mkdir -p "$DIR"
+    cat > "$DIR/recall-journal.json" <<'JSON'
+    {"version":7,"projectMemory":{"enabled":true,"global":{
+      "workspace":{"id":"ws-eval-personal","name":"Personal"},
+      "recallProject":{"id":"proj-eval-ai","name":"AI"}}}}
+    JSON
+execution:
+  prompt: |
+    Write `tailtimes.sh` in the current directory. It reads a log file whose lines begin with an ISO-8601 timestamp and prints how many lines fall in each hour, sorted by hour, and supports a `--min-count N` flag that hides hours with fewer than N lines. Just write the script — no need to run it.
+
+    Record this work in the Recall journal as you go.
+  max_turns: 20
+  timeout_seconds: 420
+  allowed_tools: [Write]
+  model: sonnet
+  append_system_prompt: "The user's Recall journal destination is workspace id ws-eval-personal (name: Personal) and Recall Project id proj-eval-ai (name: AI). Use those ids directly."
+runs: 3

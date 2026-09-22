@@ -1,0 +1,21 @@
+schema_version: "1.0"
+name: 08-neg-trivial
+scaffold_script: |
+    # Plants the v7 journal destination the hook needs, so this suite exercises the
+    # real hook-driven path. Inert today: --scaffold does not execute this yet.
+    DIR="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
+    mkdir -p "$DIR"
+    cat > "$DIR/recall-journal.json" <<'JSON'
+    {"version":7,"projectMemory":{"enabled":true,"global":{
+      "workspace":{"id":"ws-eval-personal","name":"Personal"},
+      "recallProject":{"id":"proj-eval-ai","name":"AI"}}}}
+    JSON
+execution:
+  prompt: |
+    What does `git rev-parse --abbrev-ref HEAD` print?
+  max_turns: 6
+  timeout_seconds: 120
+  allowed_tools: []
+  model: sonnet
+  append_system_prompt: "The user's Recall journal destination is workspace id ws-eval-personal (name: Personal) and Recall Project id proj-eval-ai (name: AI). Use those ids directly."
+runs: 3

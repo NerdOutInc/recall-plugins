@@ -1,0 +1,10 @@
+{
+  "version": 7,
+  "projectMemory": {
+    "enabled": true,
+    "global": {
+      "workspace": { "id": "ws-eval-personal", "name": "Personal" },
+      "recallProject": { "id": "proj-eval-ai", "name": "AI" }
+    }
+  }
+}

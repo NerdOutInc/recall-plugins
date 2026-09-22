@@ -1,0 +1,31 @@
+schema_version: "1.0"
+name: 10-plan-to-decisions
+scaffold_script: |
+    # Plants the v7 journal destination the hook needs, so this suite exercises the
+    # real hook-driven path. Inert today: --scaffold does not execute this yet.
+    DIR="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
+    mkdir -p "$DIR"
+    cat > "$DIR/recall-journal.json" <<'JSON'
+    {"version":7,"projectMemory":{"enabled":true,"global":{
+      "workspace":{"id":"ws-eval-personal","name":"Personal"},
+      "recallProject":{"id":"proj-eval-ai","name":"AI"}}}}
+    JSON
+execution:
+  prompt: |
+    Implement this plan as `normalize.py` in the current directory.
+
+    Plan: normalize North American phone numbers for storage.
+    - Accept input with spaces, dashes, dots, parentheses, and an optional leading +1.
+    - Store as exactly 10 digits, no country code, no punctuation.
+    - Reject anything that is not resolvable to 10 digits, with a clear error naming the input.
+    - Expose one function `normalize(value)` plus a small `main()` that normalizes each argument.
+
+    Where the plan leaves a choice open, make the call and be explicit about why.
+
+    Record the decisions you make in the Recall journal as you go.
+  max_turns: 20
+  timeout_seconds: 420
+  allowed_tools: [Write]
+  model: sonnet
+  append_system_prompt: "The user's Recall journal destination is workspace id ws-eval-personal (name: Personal) and Recall Project id proj-eval-ai (name: AI). Use those ids directly."
+runs: 3
