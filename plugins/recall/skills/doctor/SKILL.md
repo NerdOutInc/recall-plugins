@@ -71,12 +71,20 @@ check was observed; unknown and skipped checks remain unverified.
 - `mcp-listener` — skipped by default. With `--probe`, tests TCP reachability
   on 127.0.0.1:38473 (release) and :38474 (debug), not authentication.
 - `app-group-socket` — passive socket metadata for both supported app-group
-  containers: company (`3HN46HB3ZW.com.nerdout.recall`) and personal
-  (`9Y4E2277K9.com.brianpattison.nerdout`). Each identity's release (`mcp.sock`)
-  and Debug (`mcp.dev.sock`) results are labeled separately. If neither container
-  contains a socket, the check warns; presence does not prove a live or
-  authenticated connection. OAuth fallback remains governed by the bridge's
-  existing rules; a missing socket does not authorize a downgrade.
+  containers: company (`3HN46HB3ZW.com.nerdout.recall`) and legacy personal
+  (`9Y4E2277K9.com.brianpattison.nerdout`, before recall-app #752). Each
+  identity's release (`mcp.sock`) and Debug (`mcp.dev.sock`) results are labeled
+  separately. `ok` covers filesystem presence only (`scope: filesystem_presence`);
+  `helperMatch: unverified` means it does not identify the selected helper's
+  container or build. A helper dials only its own identity and build, so a
+  personal-only socket cannot clear a company helper's `no_socket` (or vice
+  versa). The report names single-identity results and gives conditional
+  `no_socket` guidance. If neither container contains a socket, the check warns;
+  presence never proves a live or authenticated connection. Recall creates
+  sockets in place; this metadata check deliberately does not follow symlinks,
+  even though the helper's connection would. Retain the personal rows while
+  older personal-signed builds remain supported. OAuth fallback remains governed
+  by the bridge's existing rules; socket metadata never authorizes a downgrade.
 - `session-bridge` — a fresh bounded process snapshot, with no argv written to
   disk. Supported Claude Code session ancestry can report a bridge present or
   absent. Shared Codex app-server/TUI and Cursor IDE ancestry cannot identify

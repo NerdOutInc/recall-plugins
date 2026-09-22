@@ -59,8 +59,8 @@ afterEach(() => {
   }
 });
 
-function makeTemporaryDirectory(root = os.tmpdir()) {
-  const directory = fs.mkdtempSync(path.join(root, "recall-doctor-"));
+function makeTemporaryDirectory() {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "recall-doctor-"));
   temporaryDirectories.push(directory);
   return directory;
 }
@@ -268,9 +268,26 @@ for (const [scenario, presentIndices] of [
     },
     async (t) => {
       // Darwin's Unix socket path limit is too short for its usual temp root.
-      const home = makeTemporaryDirectory(
-        process.platform === "darwin" ? "/tmp" : os.tmpdir(),
+      const home = fs.mkdtempSync(
+        path.join(process.platform === "darwin" ? "/tmp" : os.tmpdir(), "rd-"),
       );
+      const servers = [];
+      // Own this directory here, outside the shared afterEach, so every
+      // server closes (and unlinks its socket) before the home is removed.
+      t.after(async () => {
+        const closed = await Promise.allSettled(
+          servers.map(
+            (server) =>
+              new Promise((resolve, reject) => {
+                server.close((error) => (error ? reject(error) : resolve()));
+              }),
+          ),
+        );
+        fs.rmSync(home, { force: true, recursive: true });
+        for (const result of closed) {
+          if (result.status === "rejected") throw result.reason;
+        }
+      });
       const expected = socketFixtures.map(
         ({ container, ...socket }, index) => ({
           ...socket,
@@ -286,21 +303,20 @@ for (const [scenario, presentIndices] of [
       );
       let connections = 0;
       for (const socket of expected.filter((entry) => entry.present)) {
+        assert.ok(
+          Buffer.byteLength(socket.path, "utf8") < 104,
+          `Unix socket fixture path exceeds macOS's 103-byte limit: ${socket.path}`,
+        );
         fs.mkdirSync(path.dirname(socket.path), { recursive: true });
         const server = net.createServer((connection) => {
           connections += 1;
           connection.destroy();
         });
-        t.after(
-          () =>
-            new Promise((resolve, reject) => {
-              server.close((error) => (error ? reject(error) : resolve()));
-            }),
-        );
         await new Promise((resolve, reject) => {
           server.once("error", reject);
           server.listen(socket.path, resolve);
         });
+        servers.push(server);
       }
 
       assert.deepEqual(inspectAppGroupSockets(home), expected);
@@ -317,14 +333,18 @@ for (const [scenario, presentIndices] of [
       );
       assert.equal(check.ok, presentIndices.length > 0);
       assert.equal(check.severity, "warn");
+      assert.equal(check.scope, "filesystem_presence");
+      assert.equal(check.helperMatch, "unverified");
       assert.equal(
-        check.detail,
-        expected
-          .map(
-            (socket) =>
-              `${socket.identity} ${socket.build} (${socket.name}): ${socket.present ? "present" : "missing"}`,
-          )
-          .join(", "),
+        check.detail.startsWith(
+          expected
+            .map(
+              (socket) =>
+                `${socket.identity} ${socket.build === "debug" ? "Debug" : socket.build} (${socket.name}): ${socket.present ? "present" : "missing"}`,
+            )
+            .join(", "),
+        ),
+        true,
       );
       assert.equal(report.firstBrokenLink, null);
       assert.equal(
@@ -337,7 +357,25 @@ for (const [scenario, presentIndices] of [
           /Socket absence does not authorize OAuth fallback/,
         );
       } else {
-        assert.equal(check.fix, undefined);
+        const presentIdentities = new Set(
+          expected
+            .filter((socket) => socket.present)
+            .map((socket) => socket.identity),
+        );
+        const expectedIdentities =
+          presentIdentities.size === 1
+            ? `only the ${[...presentIdentities][0]} identity`
+            : "both company and personal identities";
+        assert.ok(check.detail.includes(expectedIdentities));
+        assert.match(
+          check.detail,
+          /selected helper's identity and build are unverified/,
+        );
+        assert.match(
+          check.detail,
+          /another container or build does not clear no_socket/,
+        );
+        assert.match(check.fix, /If the bridge reports no_socket/);
       }
       assert.equal(
         report.checks.find((entry) => entry.name === "mcp-listener").status,
@@ -350,6 +388,17 @@ for (const [scenario, presentIndices] of [
       assert.deepEqual(fixture.events, ["snapshot"]);
       await new Promise((resolve) => setImmediate(resolve));
       assert.equal(connections, 0, "inspection must not connect to a socket");
+
+      // A link to a real listening socket is deliberately not counted as a
+      // socket created in place by Recall, even though connect follows it.
+      if (presentIndices.length === 1) {
+        const target = expected[presentIndices[0]];
+        const alias = expected.find((socket) => !socket.present);
+        fs.mkdirSync(path.dirname(alias.path), { recursive: true });
+        fs.symlinkSync(target.path, alias.path);
+        assert.equal(fs.statSync(alias.path).isSocket(), true);
+        assert.deepEqual(inspectAppGroupSockets(home), expected);
+      }
     },
   );
 }
