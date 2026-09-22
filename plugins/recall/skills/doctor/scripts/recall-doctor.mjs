@@ -9,7 +9,8 @@
 //   recall-app        — the Recall Mac app process exists
 //   mcp-listener      — the loopback MCP listener answers (38473 release,
 //                       38474 debug)
-//   app-group-socket  — the app-group Unix socket the signed helper uses
+//   app-group-socket  — company/personal release/Debug socket metadata;
+//                       matching the selected helper remains unverified
 //   session-bridge    — advisory process ancestry, unknown for shared hosts
 //   current-session-tools — caller-reported Recall read-tool availability
 //   bridge-probe      — a NEW bridge answers initialize, only with --probe
@@ -31,8 +32,16 @@ import {
 
 const RELEASE_PORT = 38473;
 const DEBUG_PORT = 38474;
-const APP_GROUP_CONTAINER = "9Y4E2277K9.com.brianpattison.nerdout";
-const SOCKET_NAMES = ["mcp.sock", "mcp.dev.sock"];
+// Explicitly supported app identities; inspection never selects a transport.
+const APP_GROUP_CONTAINERS = [
+  { identity: "company", container: "3HN46HB3ZW.com.nerdout.recall" },
+  // Legacy personal-account identity, before recall-app #752.
+  { identity: "personal", container: "9Y4E2277K9.com.brianpattison.nerdout" },
+];
+const SOCKET_VARIANTS = [
+  { build: "release", name: "mcp.sock" },
+  { build: "debug", name: "mcp.dev.sock" },
+];
 // Match the executable position, not an app path mentioned in a shell prompt.
 const APP_COMMAND_PATTERN =
   /^(?:"[^"\r\n]*\/Recall\.app\/Contents\/MacOS\/Recall"|'[^'\r\n]*\/Recall\.app\/Contents\/MacOS\/Recall'|\/[^\s]*\/Recall\.app\/Contents\/MacOS\/Recall)(?:\s|$)/;
@@ -252,21 +261,25 @@ export function probeTcpPort(
 }
 
 export function inspectAppGroupSockets(homeDirectory = os.homedir()) {
-  const directory = path.join(
-    homeDirectory,
-    "Library",
-    "Group Containers",
-    APP_GROUP_CONTAINER,
-  );
-  return SOCKET_NAMES.map((name) => {
-    const socketPath = path.join(directory, name);
-    let present = false;
-    try {
-      present = fs.lstatSync(socketPath).isSocket();
-    } catch {
-      // Missing or unreadable counts as absent.
-    }
-    return { name, path: socketPath, present };
+  return APP_GROUP_CONTAINERS.flatMap(({ identity, container }) => {
+    const directory = path.join(
+      homeDirectory,
+      "Library",
+      "Group Containers",
+      container,
+    );
+    return SOCKET_VARIANTS.map(({ build, name }) => {
+      const socketPath = path.join(directory, name);
+      let present = false;
+      try {
+        // Recall binds the socket in place; deliberately flag symlinks as
+        // absent metadata, even though the helper's connect would follow them.
+        present = fs.lstatSync(socketPath).isSocket();
+      } catch {
+        // Missing or unreadable counts as absent.
+      }
+      return { identity, build, name, path: socketPath, present };
+    });
   });
 }
 
@@ -572,6 +585,11 @@ export function buildReport({
     scope: "current_conversation_read_tools",
   };
   const socketPresent = sockets.some((socket) => socket.present);
+  const socketIdentities = [
+    ...new Set(
+      sockets.filter((socket) => socket.present).map((socket) => socket.identity),
+    ),
+  ];
   const listenerReachable = listener.release || listener.debug;
   const probeSkipped = probe.skipped === true;
   const logsSupported =
@@ -624,17 +642,25 @@ export function buildReport({
     {
       name: "app-group-socket",
       ok: socketPresent,
-      // Socket presence does not establish support or authorize fallback;
-      // the bridge retains its existing classified transport rules.
+      scope: "filesystem_presence",
+      helperMatch: "unverified",
+      // `ok` describes metadata only, not compatibility with the helper that
+      // the bridge selected. Presence never changes transport policy.
       severity: "warn",
-      detail: sockets
-        .map(
-          (socket) =>
-            `${socket.name}: ${socket.present ? "present" : "missing"}`,
-        )
-        .join(", "),
+      detail:
+        sockets
+          .map(
+            (socket) =>
+              `${socket.identity} ${socket.build === "debug" ? "Debug" : socket.build} (${socket.name}): ${socket.present ? "present" : "missing"}`,
+          )
+          .join(", ") +
+        (socketPresent
+          ? `. Socket files are present for ${socketIdentities.length === 1 ? `only the ${socketIdentities[0]} identity` : "both company and personal identities"}. This checks filesystem presence only; the selected helper's identity and build are unverified. Each installed helper dials only its own identity and build; a socket in another container or build does not clear no_socket.`
+          : ""),
       ...(socketPresent
-        ? {}
+        ? {
+            fix: "If the bridge reports no_socket, check which Recall bundle supplies the selected helper and open the matching app/build. Socket presence does not authorize OAuth fallback.",
+          }
         : {
             fix: "No app-group MCP socket was found. Check Recall's MCP setting and app state. Socket absence does not authorize OAuth fallback; the bridge retains its existing transport rules.",
           }),
