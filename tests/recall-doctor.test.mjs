@@ -11,6 +11,7 @@ import {
   buildReport,
   bridgeProbeArguments,
   findRecallAppProcess,
+  inspectAppGroupSockets,
   logDirectorySlug,
   newestMcpLog,
   parseDoctorArguments,
@@ -25,14 +26,41 @@ const repositoryRoot = path.resolve(
 );
 const temporaryDirectories = [];
 
+const socketFixtures = [
+  {
+    identity: "company",
+    container: "3HN46HB3ZW.com.nerdout.recall",
+    build: "release",
+    name: "mcp.sock",
+  },
+  {
+    identity: "company",
+    container: "3HN46HB3ZW.com.nerdout.recall",
+    build: "debug",
+    name: "mcp.dev.sock",
+  },
+  {
+    identity: "personal",
+    container: "9Y4E2277K9.com.brianpattison.nerdout",
+    build: "release",
+    name: "mcp.sock",
+  },
+  {
+    identity: "personal",
+    container: "9Y4E2277K9.com.brianpattison.nerdout",
+    build: "debug",
+    name: "mcp.dev.sock",
+  },
+];
+
 afterEach(() => {
   for (const directory of temporaryDirectories.splice(0)) {
     fs.rmSync(directory, { force: true, recursive: true });
   }
 });
 
-function makeTemporaryDirectory() {
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "recall-doctor-"));
+function makeTemporaryDirectory(root = os.tmpdir()) {
+  const directory = fs.mkdtempSync(path.join(root, "recall-doctor-"));
   temporaryDirectories.push(directory);
   return directory;
 }
@@ -48,10 +76,11 @@ function healthyReportInput(overrides = {}) {
       command: "/Applications/Recall.app/Contents/MacOS/Recall",
     },
     listener: { release: true, debug: false },
-    sockets: [
-      { name: "mcp.sock", path: "/tmp/mcp.sock", present: true },
-      { name: "mcp.dev.sock", path: "/tmp/mcp.dev.sock", present: false },
-    ],
+    sockets: socketFixtures.map(({ container, ...socket }, index) => ({
+      ...socket,
+      path: path.join("/tmp", container, socket.name),
+      present: index === 0,
+    })),
     sessionBridge: {
       status: "present",
       hostPid: 500,
@@ -212,16 +241,151 @@ test("an absent bridge snapshot does not contradict reported current tools", () 
 test("a missing socket alone is a warning, not a broken link", () => {
   const report = buildReport(
     healthyReportInput({
-      sockets: [
-        { name: "mcp.sock", path: "/tmp/mcp.sock", present: false },
-        { name: "mcp.dev.sock", path: "/tmp/mcp.dev.sock", present: false },
-      ],
+      sockets: healthyReportInput().sockets.map((socket) => ({
+        ...socket,
+        present: false,
+      })),
     }),
   );
 
   assert.equal(report.firstBrokenLink, null);
   assert.match(report.summary, /Warnings: app-group-socket/);
 });
+
+for (const [scenario, presentIndices] of [
+  ["company release only", [0]],
+  ["company Debug only", [1]],
+  ["personal release only", [2]],
+  ["personal Debug only", [3]],
+  ["both identities and builds", [0, 1, 2, 3]],
+  ["company release and personal Debug", [0, 3]],
+  ["neither identity", []],
+]) {
+  test(
+    `passively diagnoses app-group sockets: ${scenario}`,
+    {
+      skip: process.platform === "win32",
+    },
+    async (t) => {
+      // Darwin's Unix socket path limit is too short for its usual temp root.
+      const home = makeTemporaryDirectory(
+        process.platform === "darwin" ? "/tmp" : os.tmpdir(),
+      );
+      const expected = socketFixtures.map(
+        ({ container, ...socket }, index) => ({
+          ...socket,
+          path: path.join(
+            home,
+            "Library",
+            "Group Containers",
+            container,
+            socket.name,
+          ),
+          present: presentIndices.includes(index),
+        }),
+      );
+      let connections = 0;
+      for (const socket of expected.filter((entry) => entry.present)) {
+        fs.mkdirSync(path.dirname(socket.path), { recursive: true });
+        const server = net.createServer((connection) => {
+          connections += 1;
+          connection.destroy();
+        });
+        t.after(
+          () =>
+            new Promise((resolve, reject) => {
+              server.close((error) => (error ? reject(error) : resolve()));
+            }),
+        );
+        await new Promise((resolve, reject) => {
+          server.once("error", reject);
+          server.listen(socket.path, resolve);
+        });
+      }
+
+      assert.deepEqual(inspectAppGroupSockets(home), expected);
+      const fixture = stubDoctorDependencies();
+      const report = await runDoctor(
+        { host: "codex", sessionTools: "available" },
+        {
+          ...fixture.dependencies,
+          inspectSockets: () => inspectAppGroupSockets(home),
+        },
+      );
+      const check = report.checks.find(
+        (entry) => entry.name === "app-group-socket",
+      );
+      assert.equal(check.ok, presentIndices.length > 0);
+      assert.equal(check.severity, "warn");
+      assert.equal(
+        check.detail,
+        expected
+          .map(
+            (socket) =>
+              `${socket.identity} ${socket.build} (${socket.name}): ${socket.present ? "present" : "missing"}`,
+          )
+          .join(", "),
+      );
+      assert.equal(report.firstBrokenLink, null);
+      assert.equal(
+        report.summary.includes("app-group-socket"),
+        presentIndices.length === 0,
+      );
+      if (presentIndices.length === 0) {
+        assert.match(
+          check.fix,
+          /Socket absence does not authorize OAuth fallback/,
+        );
+      } else {
+        assert.equal(check.fix, undefined);
+      }
+      assert.equal(
+        report.checks.find((entry) => entry.name === "mcp-listener").status,
+        "skipped",
+      );
+      assert.equal(
+        report.checks.find((entry) => entry.name === "bridge-probe").status,
+        "skipped",
+      );
+      assert.deepEqual(fixture.events, ["snapshot"]);
+      await new Promise((resolve) => setImmediate(resolve));
+      assert.equal(connections, 0, "inspection must not connect to a socket");
+    },
+  );
+}
+
+test(
+  "does not mistake files, directories, or symlinks for app-group sockets",
+  {
+    skip: process.platform === "win32",
+  },
+  () => {
+    const home = makeTemporaryDirectory();
+    const paths = socketFixtures.map((socket) =>
+      path.join(
+        home,
+        "Library",
+        "Group Containers",
+        socket.container,
+        socket.name,
+      ),
+    );
+    for (const socketPath of paths) {
+      fs.mkdirSync(path.dirname(socketPath), { recursive: true });
+    }
+    fs.writeFileSync(paths[0], "not a socket");
+    fs.mkdirSync(paths[1]);
+    fs.symlinkSync(paths[0], paths[2]);
+    fs.symlinkSync(path.join(home, "missing"), paths[3]);
+
+    const sockets = inspectAppGroupSockets(home);
+    assert.equal(sockets.length, 4);
+    assert.equal(
+      sockets.some((socket) => socket.present),
+      false,
+    );
+  },
+);
 
 test("an unknown session bridge warns without breaking the chain", () => {
   const report = buildReport(

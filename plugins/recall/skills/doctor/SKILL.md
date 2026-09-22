@@ -70,8 +70,12 @@ check was observed; unknown and skipped checks remain unverified.
 - `recall-app` — the Recall.app process exists.
 - `mcp-listener` — skipped by default. With `--probe`, tests TCP reachability
   on 127.0.0.1:38473 (release) and :38474 (debug), not authentication.
-- `app-group-socket` — the app-group socket the Recall-signed helper uses.
-  Missing is a warning. OAuth fallback remains governed by the bridge's
+- `app-group-socket` — passive socket metadata for both supported app-group
+  containers: company (`3HN46HB3ZW.com.nerdout.recall`) and personal
+  (`9Y4E2277K9.com.brianpattison.nerdout`). Each identity's release (`mcp.sock`)
+  and Debug (`mcp.dev.sock`) results are labeled separately. If neither container
+  contains a socket, the check warns; presence does not prove a live or
+  authenticated connection. OAuth fallback remains governed by the bridge's
   existing rules; a missing socket does not authorize a downgrade.
 - `session-bridge` — a fresh bounded process snapshot, with no argv written to
   disk. Supported Claude Code session ancestry can report a bridge present or

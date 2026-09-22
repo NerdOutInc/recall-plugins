@@ -31,8 +31,15 @@ import {
 
 const RELEASE_PORT = 38473;
 const DEBUG_PORT = 38474;
-const APP_GROUP_CONTAINER = "9Y4E2277K9.com.brianpattison.nerdout";
-const SOCKET_NAMES = ["mcp.sock", "mcp.dev.sock"];
+// Explicitly supported app identities; inspection never selects a transport.
+const APP_GROUP_CONTAINERS = [
+  { identity: "company", container: "3HN46HB3ZW.com.nerdout.recall" },
+  { identity: "personal", container: "9Y4E2277K9.com.brianpattison.nerdout" },
+];
+const SOCKET_VARIANTS = [
+  { build: "release", name: "mcp.sock" },
+  { build: "debug", name: "mcp.dev.sock" },
+];
 // Match the executable position, not an app path mentioned in a shell prompt.
 const APP_COMMAND_PATTERN =
   /^(?:"[^"\r\n]*\/Recall\.app\/Contents\/MacOS\/Recall"|'[^'\r\n]*\/Recall\.app\/Contents\/MacOS\/Recall'|\/[^\s]*\/Recall\.app\/Contents\/MacOS\/Recall)(?:\s|$)/;
@@ -252,21 +259,23 @@ export function probeTcpPort(
 }
 
 export function inspectAppGroupSockets(homeDirectory = os.homedir()) {
-  const directory = path.join(
-    homeDirectory,
-    "Library",
-    "Group Containers",
-    APP_GROUP_CONTAINER,
-  );
-  return SOCKET_NAMES.map((name) => {
-    const socketPath = path.join(directory, name);
-    let present = false;
-    try {
-      present = fs.lstatSync(socketPath).isSocket();
-    } catch {
-      // Missing or unreadable counts as absent.
-    }
-    return { name, path: socketPath, present };
+  return APP_GROUP_CONTAINERS.flatMap(({ identity, container }) => {
+    const directory = path.join(
+      homeDirectory,
+      "Library",
+      "Group Containers",
+      container,
+    );
+    return SOCKET_VARIANTS.map(({ build, name }) => {
+      const socketPath = path.join(directory, name);
+      let present = false;
+      try {
+        present = fs.lstatSync(socketPath).isSocket();
+      } catch {
+        // Missing or unreadable counts as absent.
+      }
+      return { identity, build, name, path: socketPath, present };
+    });
   });
 }
 
@@ -630,7 +639,7 @@ export function buildReport({
       detail: sockets
         .map(
           (socket) =>
-            `${socket.name}: ${socket.present ? "present" : "missing"}`,
+            `${socket.identity} ${socket.build} (${socket.name}): ${socket.present ? "present" : "missing"}`,
         )
         .join(", "),
       ...(socketPresent
