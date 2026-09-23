@@ -1,15 +1,7 @@
-schema_version: "1.0"
+schema_version: "1.1"
 name: 05-close-card-failed
-scaffold_script: |
-    # Plants the v7 journal destination the hook needs, so this suite exercises the
-    # real hook-driven path. Inert today: --scaffold does not execute this yet.
-    DIR="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
-    mkdir -p "$DIR"
-    cat > "$DIR/recall-journal.json" <<'JSON'
-    {"version":7,"projectMemory":{"enabled":true,"global":{
-      "workspace":{"id":"ws-eval-personal","name":"Personal"},
-      "recallProject":{"id":"proj-eval-ai","name":"AI"}}}}
-    JSON
+context:
+  scaffold_script: scaffold.sh
 execution:
   prompt: |
     Create `chunk.py` in the current directory. This function is meant to split a sequence into consecutive chunks of at most `size`, but it drops the final partial chunk:

@@ -61,14 +61,16 @@ and calling them for real would have written a live session and Today card.
 
 ## Known limits — read before trusting a number
 
-1. **The automatic hook path is NOT tested.** The journal hook only ships the v7
-   protocol when `CLAUDE_CONFIG_DIR/recall-journal.json` exists, and the sandbox
-   builds a fresh config dir. Cases therefore ask for the journal the way a user
-   would, and supply the destination ids via `append_system_prompt`. This measures
-   the skill's behavior when journaling is requested — not the hook-driven path
-   that every real incident came from. Each case carries a `scaffold_script` that
-   plants the config; it is inert because `--scaffold` does not currently execute
-   it. When that is fixed, the scaffold makes this suite test the real path.
+1. **The hook path runs only under `--scaffold`.** Every script passes it: each
+   case's `scaffold.sh` plants `recall-journal.json` where the sandboxed Claude
+   reads its config (the `config/` directory beside the sandbox home, which
+   `CLAUDE_CONFIG_DIR` does not name inside a scaffold script), so the plugin's
+   SessionStart hook delivers the v7 protocol inside the run. Cases still ask for
+   the journal the way a user would and supply the destination ids via
+   `append_system_prompt`, so both triggers are present. The earlier inline
+   `scaffold_script:` block was silently ignored by `claude plugin eval`, which is
+   why this limit used to read as untestable; results recorded before the fix were
+   measured with the prompt as the only trigger.
 2. **`01-tools-absent` tests the wrong detection path.** Mocks are suite-level, so
    the tools are always in the catalog; the case simulates absence as failing
    calls. The real incident (#52) was *catalog* absence, which the agent should

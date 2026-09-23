@@ -16,6 +16,7 @@ pnpm eval                  # full suite, runs: 3        (~6 USD, ~12 min)
 pnpm eval:local            # same, report stays local
 pnpm eval:pilot            # runs: 1, cheap smoke test  (~2 USD, ~4 min)
 pnpm eval:behavior         # the archived behavior suite (see bottom)
+pnpm eval:stack            # the stacked-PR suite: six chained sessions (see bottom)
 pnpm eval:ci               # non-interactive, no publish
 pnpm run                   # list every script
 ```
@@ -94,15 +95,18 @@ constants it was not asked about. A trap only discriminates if the task pushes o
 
 ## Known limits — read before trusting a number
 
-1. **This is not the automatic hook path.** Every prompt ends with "Check the project
+1. **The prompts still ask for the journal.** Every prompt ends with "Check the project
    journal for relevant history before you start", and the destination ids arrive via
    `append_system_prompt`. Both arms get both, but only the with-arm can act on them.
-   The journal hook only ships its protocol when `CLAUDE_CONFIG_DIR/recall-journal.json`
-   exists, and the sandbox builds a fresh config dir. So this measures *"when the
-   journal is consulted, is the code better"* — one step short of *"does installing
-   Recall make the code better"*. Each case carries a `scaffold_script` that plants the
-   config; it is inert because `--scaffold` does not currently execute it. When that is
-   fixed, the scaffold closes this gap with no other changes.
+   Since the scaffold fix, every script also passes `--scaffold`, and each case's
+   `scaffold.sh` plants `recall-journal.json` where the sandboxed Claude reads its
+   config (the `config/` directory beside the sandbox home, which `CLAUDE_CONFIG_DIR`
+   does not name inside a scaffold script), so the plugin's SessionStart hook delivers
+   the version 7 protocol inside the run as well. The earlier inline `scaffold_script:`
+   block was silently ignored by `claude plugin eval`, which is why this used to read as
+   untestable. The results table above was measured before that fix, with the prompt as
+   the only trigger. For a suite whose prompts never mention Recall and that relies on
+   the hook alone, see [the stacked-PR suite](#the-stacked-pr-suite).
 2. **Run-to-run variance is real.** The agent occasionally answers without writing the
    file, which scores 0 and can make a grader throw. `runs: 3` is a floor, not comfort.
 3. **The journal is a fixture, not a real project's history.** `mocks/recall/` holds a
@@ -137,3 +141,11 @@ hand-built Today cards, no blind-retry loops, faithful read-back. It caught a re
 the PR #61 legacy-fallback regression and a confabulation bug where the agent invented
 technical justifications and attributed them to journal entries. Run it with
 `pnpm eval:behavior`.
+
+## The stacked-PR suite
+
+`../evals-stack/` asks the question this suite cannot: when one change ships as six
+stacked PRs across six fresh sessions, does a journal the agent wrote *itself* make the
+later sessions better? Its runner chains the sessions so each one reads back what the
+previous one recorded, and its prompts never mention Recall, so the hook is the only
+trigger. Run it with `pnpm eval:stack`; its README has the design and the results.

@@ -9,3 +9,7 @@ plugins/recall/evals-behavior/results/
 plugins/recall/backups/
 plugins/recall/evals/fixtures/claude-config/.claude.json
 plugins/recall/evals/fixtures/claude-config/backups/
+
+# Stacked-PR eval suite: generated work dir and run artifacts
+plugins/recall/evals-stack/results/
+plugins/recall/evals-stack-work*/
