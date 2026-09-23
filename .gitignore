@@ -1,2 +1,15 @@
 .DS_Store
 plugins/recall/bridge/build/node_modules/
+
+# Eval run artifacts (reports, traces, per-run JSON)
+plugins/recall/evals/results/
+plugins/recall/evals-behavior/results/
+
+# Claude Code config backups dropped by sandboxed eval runs
+plugins/recall/backups/
+plugins/recall/evals/fixtures/claude-config/.claude.json
+plugins/recall/evals/fixtures/claude-config/backups/
+
+# Stacked-PR eval suite: generated work dir and run artifacts
+plugins/recall/evals-stack/results/
+plugins/recall/evals-stack-work*/
