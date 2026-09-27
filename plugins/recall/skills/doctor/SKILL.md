@@ -1,6 +1,6 @@
 ---
 name: doctor
-description: Diagnose missing or failing Recall MCP tools in Claude Code, Codex, or Cursor. Use when the user invokes doctor, Recall tools are missing, or a Recall call fails; it never certifies automatic journaling.
+description: Diagnose missing or failing Recall MCP tools in Claude Code, Codex, or Cursor. Use when the user invokes doctor, Recall tools are missing, or a Recall call fails; it never certifies automatic journaling or automatic replies.
 ---
 
 # Recall Doctor
@@ -33,6 +33,14 @@ CLI entries, and approved live sessions do not establish this conversation's
 tool attachment.
 Do not ask the user to enable an already-enabled server, broaden workspace
 access, revoke existing grants, or reset credentials as a diagnostic shortcut.
+
+Doctor diagnoses regular plugin access only: the tools attached to this
+conversation for an agent the user is running. Recall's optional automatic
+replies to comment mentions are a separate app capability with its own consent
+and scheduling; Doctor does not inspect, enable, or certify it and never
+creates or launches a test request. A missing or failed automatic reply is not
+evidence about this conversation's tools, and working tools here are not
+evidence that automatic replies are on.
 
 Resolve `scripts/recall-doctor` relative to this `SKILL.md` and run its absolute
 path from the current working directory. Always select the current host with

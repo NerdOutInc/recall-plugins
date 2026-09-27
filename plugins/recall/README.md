@@ -31,6 +31,32 @@ legacy notes. Load only the selected mode. Configuration and Codex hook trust
 remain separate procedures, so ordinary project work does not repeatedly load
 or run setup instructions.
 
+Plugin `0.41.0` aligns the agent-request guidance with Recall's optional
+automatic replies. After the owner opts in, the Recall app can answer a
+comment mention on its own through a managed attempt that holds a server
+lease; the plugin does not launch, drive, or certify that, and nothing in this
+release answers requests in the background. The manual generation-9 sequence
+— claim, read the thread, reply, resolve after `syncStatus: "synced"` — and
+its retry-stable claim and reply identities are unchanged. What changed is the
+reading of the two live statuses: `OPEN` can follow an interrupted or paused
+automatic attempt (the list may carry a `schedulingReason`) and stays manually
+claimable, including a user-paused request; `PICKED_UP` means claimed and
+unresolved — a manual claim or a live automatic attempt — never proof that a
+model is replying. Manual claims still have no lease or automatic reclaim and
+are never taken over by age; only an automatic attempt's lease expires, after
+which the request lists as `OPEN` again. A winning manual claim fences out any
+automatic reply, and `state_conflict` on a claim can mean a live automatic
+attempt, so the skill says not to retry in a loop or rotate the claim UUID.
+Dismiss remains the owner's terminal decision, distinct from cancelling an
+agent that is already working. The `SessionStart` hook keeps its bounded
+metadata-only sweep and byte budget; its text now describes `PICKED_UP` as
+claimed rather than answered. Doctor gains a passive note separating regular
+plugin access from the app's automatic-reply capability and never launches a
+test request. Fixtures add old-app/new-plugin and new-app/old-plugin
+compatibility, manual pickup after failed automation, a live managed-claim
+conflict, and a missing-capability case; the catalog fixture stays at the
+manual contract. No bridge or tool changes.
+
 Plugin `0.40.0` adds comment-mention request discovery for Claude Code and
 Codex. Their `SessionStart` hook asks for one bounded `OPEN` and `PICKED_UP`
 page (`limit: 10`) per readable workspace after `list_workspaces`, without requiring a
@@ -39,8 +65,9 @@ workspaces, and parent note types; source titles and comment text are read
 only when the user asks to inspect or handle requests. Resume or compaction
 can repeat pending counts. Claimed requests remain unresolved until their
 original claim is completed or the owner dismisses them on the original
-comment in Recall; there is
-no claim lease or automatic reclaim. The detailed handling and retry protocol
+comment in Recall; manual claims have no lease or automatic reclaim (only the
+Recall app's automatic attempts, added later, hold a lease that expires — see
+`0.41.0`). The detailed handling and retry protocol
 loads from the Recall skill's
 [agent-request reference](skills/recall/references/agent-requests.md) only when
 needed. This feature requires an installed Recall app with catalog generation
@@ -597,7 +624,12 @@ Recall apps: `list_agent_requests`, `claim_agent_request`, and
 Claude Code and Codex use this surface only when the live schemas expose it.
 The startup sweep is read-only metadata discovery; reading source comments,
 claiming work, replying, and resolving require the user's request and the
-app's workspace policy. Cursor and the hosted cloud connector do not support
+app's workspace policy. This is regular plugin access: the agent handles a
+request only inside a conversation the user is running. Automatic replies to
+mentions are a separate, opt-in capability of the Recall app itself, which
+holds a server lease while it answers; the plugin does not launch it, and a
+request that automatic handling interrupted or paused lists as `OPEN` and can
+be picked up manually. Cursor and the hosted cloud connector do not support
 this agent-request inbox. See the
 [handling protocol](skills/recall/references/agent-requests.md) for surviving
 claims, exact retry identities, and the server-sync receipt required before

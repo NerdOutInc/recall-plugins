@@ -325,7 +325,10 @@ test("host manifests share the current plugin version", async () => {
   // (re-sent after a resume or compaction) and shrinks every prompt to a
   // reminder under 400 bytes, so hook context stops growing with each turn.
   // 0.40.0 adds the independent, capability-gated owner agent inbox hook.
-  assert.equal(codexPlugin.version, "0.40.0");
+  // 0.41.0 aligns the inbox guidance with Recall's optional automatic
+  // replies: OPEN can follow an interrupted attempt, PICKED_UP is claimed
+  // rather than answered, and only automatic attempts hold a lease.
+  assert.equal(codexPlugin.version, "0.41.0");
   assert.equal(claudePlugin.version, codexPlugin.version);
   const desktop = await readJson("desktop-extensions/recall/manifest.json");
   assert.equal(desktop.version, "0.10.0");

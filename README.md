@@ -36,7 +36,10 @@ runtime for each agent:
 The direct-download app can add the Claude/Codex marketplace and plugin, enable
 Recall's local MCP server, and prepare their pinned ACP runtimes. Cursor owns
 its plugin install UI, so Recall opens verified Cursor-specific steps instead. The
-sandboxed App Store build also uses guided steps for every host.
+sandboxed App Store build also uses guided steps for every host. The plugin's
+comment-mention inbox is manual — an agent answers a request only in a
+conversation you run — while automatic replies to mentions are a separate,
+opt-in Recall app feature that the plugin does not provide.
 
 Installation never grants access to a workspace. Workspace permissions stay
 separate under **Settings → MCP Server**. The current plugin connects through
