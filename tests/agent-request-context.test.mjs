@@ -33,7 +33,9 @@ test('session discovery uses metadata only and reports partial or claimed reques
       assert.match(text, /Report only counts by workspace and parent noteType from list metadata/);
       assert.match(text, /hasMore means partial counts/);
       assert.match(text, /Do not read comments, threads, or notes during this sweep/);
-      assert.match(text, /PICKED_UP remains claimed/);
+      assert.match(text, /PICKED_UP remains claimed, not proof of a live reply/);
+      // The sweep never promises to answer anything on its own.
+      assert.doesNotMatch(text, /automatic|background|on your behalf/i);
       assert.match(text, /fresh sweep and may repeat pending counts/);
       assert.match(text, /only if both pages are empty and complete/);
       assert.match(text, /Between session starts, check only on user request/);

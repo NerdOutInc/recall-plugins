@@ -42,13 +42,22 @@ when the user's request needs them.
 
 A fresh sweep after resume or compaction can repeat pending counts. Describe
 what is pending now; there is no durable guarantee that it is newly observed.
-An `OPEN` request is awaiting pickup. A `PICKED_UP` request is claimed and
-unresolved. The list returns no claim UUID, claim time, or claiming session;
-do not infer who claimed it, that work is active, or that it is stuck. The owner
-can open the original comment in Recall and choose **Dismiss** beside
-**Claude · Picked up** or **Codex · Picked up**; there is no general agent-inbox
-screen. Claims have no lease or automatic reclaim;
-never mint a replacement claim UUID to take over a surviving claim.
+An `OPEN` request is available for pickup. It may be new, or the Recall app's
+optional automatic reply may have been interrupted or paused; an optional
+`schedulingReason` (such as `transient_failure`, `source_changed`,
+`retry_budget_exhausted`, or `paused_by_user`; absent on older apps) says
+which. Every `OPEN` request stays manually claimable, including a paused one.
+A `PICKED_UP` request is claimed and unresolved: a manual claim or a live
+automatic attempt. The list returns no claim UUID, claim time, or claiming
+session; do not infer who claimed it, that a model is replying, or that it is
+stuck. Manual claims have no lease or automatic reclaim; never take over a
+`PICKED_UP` request by age or mint a replacement claim UUID. Only an automatic
+attempt holds a server lease; when it expires, the request lists as `OPEN`
+again with no plugin action. The owner can open the original comment in Recall
+and choose **Dismiss** beside **Claude · Picked up** or **Codex · Picked up**;
+there is no general agent-inbox screen. Dismiss is the owner's terminal
+decision, not a cancellation: it does not stop an agent already working
+outside Recall.
 
 ## Authorized handling and recovery
 
@@ -65,8 +74,11 @@ where applicable; a denied or unavailable read never means empty content.
 
 For an `OPEN` request, mint one `claimUuid` for its exact `requestUuid` and
 workspace, preserve it through retries and compaction, and call
-`claim_agent_request`. Proceed only on an applied receipt. `state_conflict`
-means another claim or a terminal request; do not rotate the UUID to bypass it.
+`claim_agent_request`. Proceed only on an applied receipt; it also fences out
+any automatic reply, which the app never publishes after a winning manual
+claim. `state_conflict` means another claim, a live automatic attempt
+(`currentStatus: "PICKED_UP"`), or a terminal request; do not retry in a loop
+or rotate the UUID to bypass it.
 For a surviving `PICKED_UP` request, continue only with this task's preserved
 original claim and receipt. If those are missing or uncertain, leave it
 unresolved and point the owner to **Dismiss** on the original comment in Recall. A matching host

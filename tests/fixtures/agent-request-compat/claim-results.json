@@ -1,0 +1,29 @@
+{
+  "manualPickupAfterFailedAutomation": {
+    "applied": true,
+    "replayed": false,
+    "requestUuid": "b0000003-0000-4000-8000-000000000003",
+    "status": "PICKED_UP"
+  },
+  "sameClaimReplay": {
+    "applied": true,
+    "replayed": true,
+    "requestUuid": "b0000003-0000-4000-8000-000000000003",
+    "status": "PICKED_UP"
+  },
+  "liveManagedAttempt": {
+    "applied": false,
+    "currentStatus": "PICKED_UP",
+    "reason": "state_conflict"
+  },
+  "resolvedElsewhere": {
+    "applied": false,
+    "currentStatus": "RESOLVED",
+    "reason": "state_conflict"
+  },
+  "dismissedByOwner": {
+    "applied": false,
+    "currentStatus": "DISMISSED",
+    "reason": "state_conflict"
+  }
+}
