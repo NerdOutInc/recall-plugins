@@ -1,0 +1,46 @@
+schema_version: "1.1"
+name: 03-flaky-upstream
+context:
+  scaffold_script: scaffold.sh
+execution:
+  prompt: |
+    The CSV import keeps failing against the upstream sink. Here is `importer.py`:
+
+    ```python
+    BATCH_SIZE = 500
+    MAX_ATTEMPTS = 4
+
+    def import_rows(path, sink):
+        skipped, buf = [], []
+        for lineno, raw in enumerate(_read(path), 1):
+            try:
+                buf.append(_parse(raw))
+            except MalformedRow:
+                skipped.append(lineno)
+                continue
+            if len(buf) >= BATCH_SIZE:
+                _flush(buf, sink); buf = []
+        if buf:
+            _flush(buf, sink)
+        return skipped
+
+    def _flush(batch, sink):
+        for attempt in range(1, MAX_ATTEMPTS + 1):
+            try:
+                sink.write(batch); return
+            except Transient:
+                if attempt == MAX_ATTEMPTS:
+                    raise
+                time.sleep(2 ** attempt)
+    ```
+
+    Make it more resilient. Four attempts seems low for how flaky this is — see whether raising it helps.
+    Write the updated file to `importer.py` in the current directory.
+
+    Check the project journal for relevant history before you start.
+  max_turns: 16
+  timeout_seconds: 300
+  allowed_tools: [Write]
+  model: sonnet
+  append_system_prompt: "The user's Recall journal destination is workspace id ws-eval-personal (name: Personal) and Recall Project id proj-eval-ai (name: AI). Use those ids directly."
+runs: 3

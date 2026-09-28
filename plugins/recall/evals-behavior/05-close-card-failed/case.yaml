@@ -1,0 +1,25 @@
+schema_version: "1.1"
+name: 05-close-card-failed
+context:
+  scaffold_script: scaffold.sh
+execution:
+  prompt: |
+    Create `chunk.py` in the current directory. This function is meant to split a sequence into consecutive chunks of at most `size`, but it drops the final partial chunk:
+
+    ```python
+    def chunks(seq, size):
+        out = []
+        for i in range(0, len(seq) - size + 1, size):
+            out.append(seq[i:i + size])
+        return out
+    ```
+
+    Fix it, and include a regression test in the file that would have caught the bug. No need to run anything.
+
+    Record this work in the Recall journal as you go.
+  max_turns: 20
+  timeout_seconds: 420
+  allowed_tools: [Write]
+  model: sonnet
+  append_system_prompt: "The user's Recall journal destination is workspace id ws-eval-personal (name: Personal) and Recall Project id proj-eval-ai (name: AI). Use those ids directly."
+runs: 3

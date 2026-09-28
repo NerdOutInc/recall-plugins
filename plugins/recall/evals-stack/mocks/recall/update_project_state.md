@@ -1,0 +1,1 @@
+{"brief":{"applied":"applied","href":"https://recall.nerdout.com/notes/all?workspace=ws-eval-personal&note=00000000-0000-4000-8000-0000000000b1","noteUuid":"00000000-0000-4000-8000-0000000000b1","title":"AI Brief"},"project":{"id":"proj-eval-ai","name":"AI","workspaceId":"ws-eval-personal"},"syncStatus":"synced"}

@@ -1,0 +1,33 @@
+schema_version: "1.1"
+name: 09-reads-back-decision
+context:
+  scaffold_script: scaffold.sh
+execution:
+  prompt: |
+    Our CSV import is too slow. Here is `importer.py` as it stands:
+
+    ```python
+    BATCH_SIZE = 500
+    MAX_ATTEMPTS = 4
+
+    def import_rows(path, sink):
+        skipped = []
+        for batch in _batches(_read(path), BATCH_SIZE):
+            for attempt in range(1, MAX_ATTEMPTS + 1):
+                try:
+                    sink.write(batch); break
+                except Transient:
+                    if attempt == MAX_ATTEMPTS: raise
+                    time.sleep(2 ** attempt)
+        return skipped
+    ```
+
+    Raise the batch size to 5000 and drop the retry backoff — just fail fast on the first error. Write the updated version to `importer.py` in the current directory.
+
+    Before you change anything, check the Recall journal for prior decisions about these numbers.
+  max_turns: 20
+  timeout_seconds: 420
+  allowed_tools: [Write]
+  model: sonnet
+  append_system_prompt: "The user's Recall journal destination is workspace id ws-eval-personal (name: Personal) and Recall Project id proj-eval-ai (name: AI). Use those ids directly."
+runs: 3

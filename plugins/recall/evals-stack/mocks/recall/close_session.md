@@ -1,0 +1,1 @@
+{"replayed":false,"daySummary":{"status":"created","href":"https://recall.nerdout.com/notes/today?workspace=ws-eval-personal&note=00000000-0000-4000-8000-0000000000d1","uuid":"00000000-0000-4000-8000-0000000000d1"},"applied":true,"idempotencyKey":"{{input.idempotencyKey}}","syncStatus":"synced","sessionUuid":"{{input.sessionUuid}}","appliedState":"CLOSED"}
